@@ -406,10 +406,15 @@ Visualization Manager:
         Y: 1.5123138427734375
         Z: -0.05925038084387779
       Focal Shape Fixed Size: true
+        X: 0.7718024253845215
+        Y: -0.4927719831466675
+        Z: -1.0411527156829834
+      Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
+      Pitch: 0.629797101020813
       Pitch: 0.7397968173027039
       Target Frame: base_link
       Value: ThirdPersonFollower (rviz_default_plugins)

@@ -9,6 +9,8 @@
         </li>
         <li><a href="#future-work">Future Work</a>
         </li>
+        <li><a href="#future-work">Future Work</a>
+        </li>
         <li>
         <a href="#quick-start">Quick Start</a>
         </li>
@@ -17,6 +19,9 @@
         </li>
         <li>
         <a href="#approach">Approach</a>
+        </li>
+        <li>
+        <a href="#docker">Docker</a>
         </li>
         <li>
         <a href="#configuration">Configuration</a>
@@ -30,6 +35,10 @@
 <br>
 
 A real-time, tightly coupled LiDAR-Inertial SLAM algorithm developed on top of [IKFoM](https://github.com/hku-mars/IKFoM) and [ikd-Tree](https://github.com/hku-mars/ikd-Tree) _C++_ libraries. This project's implementation is based on the existing algorithms [FASTLIO2](https://github.com/hku-mars/FAST_LIO), [LIMO-Velo](https://github.com/Huguet57/LIMO-Velo) and [DLIO](https://github.com/vectr-ucla/direct_lidar_inertial_odometry).
+
+__🎉 News! 🎉__
+  - Relocalization via [KISS-Matcher](https://github.com/MIT-SPARK/KISS-Matcher) in any previously saved map (pcd) is now possible thanks to [Victor](https://github.com/victhormoreno)! _Check out the `relocation/KISS-matcher` branch._
+  - _Comming soon!_ Loop-closure detection using [KISS-Matcher](https://github.com/MIT-SPARK/KISS-Matcher) in future branch `loop/KISS-matcher`.
 
 `Fast-LIMO` has been developed as a __thread-safe__ _C++_ library with [Eigen3](https://eigen.tuxfamily.org/index.php?title=Main_Page) and [PCL](https://pointclouds.org/) as its only dependencies. This way, it can be used outside the ROS framework __without any changes__, making it more portable. This project acts as a ROS wrapper of the self-developed [fast_limo](include/fast_limo/)'s library.
 
