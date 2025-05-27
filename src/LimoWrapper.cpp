@@ -476,40 +476,6 @@ namespace ros2wrap {
                 return false;
             }
 
-            visualization_msgs::msg::Marker getLocalMapMarker(BoxPointType bb){
-                visualization_msgs::msg::Marker m;
-
-                m.ns = "fast_limo";
-                m.id = 0;
-                m.type = visualization_msgs::msg::Marker::CUBE;
-                m.action = visualization_msgs::msg::Marker::ADD;
-
-                m.color.r = 0.0f;
-                m.color.g = 0.0f;
-                m.color.b = 1.0f;
-                m.color.a = 0.5f;
-
-                m.lifetime = rclcpp::Duration::from_seconds(0.0);
-                m.header.frame_id = this->world_frame;
-                m.header.stamp = this->get_clock()->now();
-
-                m.pose.orientation.w = 1.0;
-
-                float x_edge = bb.vertex_max[0] - bb.vertex_min[0];
-                float y_edge = bb.vertex_max[1] - bb.vertex_min[1];
-                float z_edge = bb.vertex_max[2] - bb.vertex_min[2];
-
-                m.scale.x = x_edge;
-                m.scale.y = y_edge;
-                m.scale.z = z_edge;
-
-                m.pose.position.x = bb.vertex_min[0] + x_edge/2.0;
-                m.pose.position.y = bb.vertex_min[1] + y_edge/2.0;
-                m.pose.position.z = bb.vertex_min[2] + z_edge/2.0;
-
-                return m;
-            }
-
             visualization_msgs::msg::MarkerArray getMatchesMarker(Matches& matches, std::string frame_id){
                 visualization_msgs::msg::MarkerArray m_array;
                 visualization_msgs::msg::Marker m;
