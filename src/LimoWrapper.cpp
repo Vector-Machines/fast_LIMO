@@ -39,7 +39,7 @@ namespace ros2wrap {
             rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pc_pub;
             rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr       state_pub;
 
-                // debug publishers
+                // debug publishers 
             rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr orig_pub;
             rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr desk_pub;
             rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr match_pub;
@@ -47,6 +47,9 @@ namespace ros2wrap {
             rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr body_pub;
             rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr map_bb_pub;
             rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr match_points_pub;
+            
+                // debug flag
+            bool debug_enabled_;
 
                 // TF 
             std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
@@ -68,6 +71,8 @@ namespace ros2wrap {
                     fast_limo::Config config;
                     this->loadConfig(&config);
 
+                    this->debug_enabled_ = config.debug;
+
                     rclcpp::Parameter tf_pub = this->get_parameter("frames.tf_pub");
                     this->publish_tf = tf_pub.as_bool();
 
@@ -82,16 +87,19 @@ namespace ros2wrap {
                     imu_sub_   = this->create_subscription<sensor_msgs::msg::Imu>(
                                     config.topics.imu, 1000, std::bind(&LimoWrapper::imu_callback, this, std::placeholders::_1), imu_opt);
                     
-                    // Set up publishers
+                    // Set up main publishers
                     pc_pub      = this->create_publisher<sensor_msgs::msg::PointCloud2>("/fast_limo/pointcloud", 1);
                     state_pub   = this->create_publisher<nav_msgs::msg::Odometry>("/fast_limo/state", 1);
 
-                    orig_pub     = this->create_publisher<sensor_msgs::msg::PointCloud2>("/fast_limo/original", 1);
-                    desk_pub     = this->create_publisher<sensor_msgs::msg::PointCloud2>("/fast_limo/deskewed", 1);
-                    match_pub    = this->create_publisher<sensor_msgs::msg::PointCloud2>("/fast_limo/match", 1);
-                    finalraw_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("/fast_limo/final_raw", 1);
-                    body_pub     = this->create_publisher<nav_msgs::msg::Odometry>("/fast_limo/body", 1);
-                    match_points_pub = this->create_publisher<visualization_msgs::msg::MarkerArray>("/fast_limo/match_points", 1);
+                    // Set up debug publishers only if debug is enabled
+                    if (this->debug_enabled_) {
+                        orig_pub     = this->create_publisher<sensor_msgs::msg::PointCloud2>("/fast_limo/original", 1);
+                        desk_pub     = this->create_publisher<sensor_msgs::msg::PointCloud2>("/fast_limo/deskewed", 1);
+                        match_pub    = this->create_publisher<sensor_msgs::msg::PointCloud2>("/fast_limo/match", 1);
+                        finalraw_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("/fast_limo/final_raw", 1);
+                        body_pub     = this->create_publisher<nav_msgs::msg::Odometry>("/fast_limo/body", 1);
+                        match_points_pub = this->create_publisher<visualization_msgs::msg::MarkerArray>("/fast_limo/match_points", 1);
+                    }
 
                     // Init TF broadcaster
                     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
@@ -127,36 +135,38 @@ namespace ros2wrap {
                 pc_ros.header.frame_id = this->world_frame;
                 this->pc_pub->publish(pc_ros);
 
-                // Publish debugging pointclouds
-                sensor_msgs::msg::PointCloud2 orig_msg;
-                pcl::toROSMsg(*loc.get_orig_pointcloud(), orig_msg);
-                orig_msg.header.stamp = this->get_clock()->now();
-                orig_msg.header.frame_id = this->body_frame;
-                this->orig_pub->publish(orig_msg);
+                // Publish debugging pointclouds only if debug is enabled
+                if (this->debug_enabled_) {
+                    sensor_msgs::msg::PointCloud2 orig_msg;
+                    pcl::toROSMsg(*loc.get_orig_pointcloud(), orig_msg);
+                    orig_msg.header.stamp = this->get_clock()->now();
+                    orig_msg.header.frame_id = this->body_frame;
+                    this->orig_pub->publish(orig_msg);
 
-                sensor_msgs::msg::PointCloud2 deskewed_msg;
-                pcl::toROSMsg(*loc.get_deskewed_pointcloud(), deskewed_msg);
-                deskewed_msg.header.stamp = this->get_clock()->now();
-                deskewed_msg.header.frame_id = this->world_frame;
-                this->desk_pub->publish(deskewed_msg);
+                    sensor_msgs::msg::PointCloud2 deskewed_msg;
+                    pcl::toROSMsg(*loc.get_deskewed_pointcloud(), deskewed_msg);
+                    deskewed_msg.header.stamp = this->get_clock()->now();
+                    deskewed_msg.header.frame_id = this->world_frame;
+                    this->desk_pub->publish(deskewed_msg);
 
-                sensor_msgs::msg::PointCloud2 match_msg;
-                pcl::toROSMsg(*loc.get_pc2match_pointcloud(), match_msg);
-                match_msg.header.stamp = this->get_clock()->now();
-                match_msg.header.frame_id = this->body_frame;
-                this->match_pub->publish(match_msg);
+                    sensor_msgs::msg::PointCloud2 match_msg;
+                    pcl::toROSMsg(*loc.get_pc2match_pointcloud(), match_msg);
+                    match_msg.header.stamp = this->get_clock()->now();
+                    match_msg.header.frame_id = this->body_frame;
+                    this->match_pub->publish(match_msg);
 
-                sensor_msgs::msg::PointCloud2 finalraw_msg;
-                pcl::toROSMsg(*loc.get_finalraw_pointcloud(), finalraw_msg);
-                finalraw_msg.header.stamp = this->get_clock()->now();
-                finalraw_msg.header.frame_id = this->world_frame;
-                this->finalraw_pub->publish(finalraw_msg);
+                    sensor_msgs::msg::PointCloud2 finalraw_msg;
+                    pcl::toROSMsg(*loc.get_finalraw_pointcloud(), finalraw_msg);
+                    finalraw_msg.header.stamp = this->get_clock()->now();
+                    finalraw_msg.header.frame_id = this->world_frame;
+                    this->finalraw_pub->publish(finalraw_msg);
 
-                // Visualize current matches
-                visualization_msgs::msg::MarkerArray match_markers = this->getMatchesMarker(loc.get_matches(), 
-                                                                                        this->world_frame
-                                                                                        );
-                this->match_points_pub->publish(match_markers);
+                    // Visualize current matches
+                    visualization_msgs::msg::MarkerArray match_markers = this->getMatchesMarker(loc.get_matches(), 
+                                                                                            this->world_frame
+                                                                                            );
+                    this->match_points_pub->publish(match_markers);
+                }
             }
 
             void imu_callback(const sensor_msgs::msg::Imu & msg) {
@@ -172,10 +182,14 @@ namespace ros2wrap {
                 // State publishing
                 nav_msgs::msg::Odometry state_msg, body_msg;
                 this->fromLimoToROS(loc.getWorldState(), loc.getPoseCovariance(), loc.getTwistCovariance(), state_msg);
-                this->fromLimoToROS(loc.getBodyState(), loc.getPoseCovariance(), loc.getTwistCovariance(), body_msg);
-
+                
                 this->state_pub->publish(state_msg);
-                this->body_pub->publish(body_msg);
+                
+                // Publish body state only if debug is enabled
+                if (this->debug_enabled_) {
+                    this->fromLimoToROS(loc.getBodyState(), loc.getPoseCovariance(), loc.getTwistCovariance(), body_msg);
+                    this->body_pub->publish(body_msg);
+                }
 
                 // TF broadcasting
                 if(this->publish_tf)
