@@ -230,7 +230,9 @@
             esekfom::esekf<state_ikfom, 12, input_ikfom>::cov P = this->_iKFoM.get_P();
             Eigen::Matrix<double, 6, 6> P_odom = Eigen::Matrix<double, 6, 6>::Zero();
             P_odom.block<3, 3>(0, 0) = P.block<3, 3>(6, 6);
-            P_odom.block<3, 3>(3, 3) = config.ikfom.cov_gyro * Eigen::Matrix<double, 3, 3>::Identity();
+            P_odom.block<3, 3>(3, 3) = (config.ikfom.cov_gyro * Eigen::Matrix<double, 3, 3>::Identity()) + P.block<3, 3>(9, 9);
+            P_odom.block<3, 3>(0, 3) = -P.block<3, 3>(6, 9);
+            P_odom.block<3, 3>(3, 0) = -P.block<3, 3>(9, 6);
 
             std::vector<double> cov(P_odom.size());
             Eigen::Map<Eigen::MatrixXd>(cov.data(), P_odom.rows(), P_odom.cols()) = P_odom;
