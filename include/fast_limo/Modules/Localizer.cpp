@@ -246,7 +246,7 @@
 
         void Localizer::updatePointCloud(pcl::PointCloud<PointType>::Ptr& raw_pc, double time_stamp){
 
-            auto start_time = chrono::system_clock::now();
+            auto start_time = std::chrono::system_clock::now();
 
             if(raw_pc->points.size() < 1){
                 std::cout << "FAST_LIMO::Raw PointCloud is empty!\n";
@@ -396,15 +396,12 @@
                 }
 
                 // Add scan to map
-                if(this->config.ikfom.mapping.local_mapping)
-                    map.add(mapped_scan, this->state, this->scan_stamp);
-                else 
-                    map.add(mapped_scan, this->scan_stamp);
+                map.add(mapped_scan, this->scan_stamp);
 
             }else
                 std::cout << "-------------- FAST_LIMO::NULL ITERATION --------------\n";
 
-            auto end_time = chrono::system_clock::now();
+            auto end_time = std::chrono::system_clock::now();
             elapsed_time = end_time - start_time;
 
             // fill stats
@@ -797,8 +794,9 @@
                 
                 point_time_cmp = [](const PointType& p1, const PointType& p2)
                 { return p1.timestamp < p2.timestamp; };
-                extract_point_time = [&sweep_ref_time](PointType& pt)
-                { return sweep_ref_time + pt.timestamp*1e-9f; };
+                extract_point_time = [&sweep_ref_time, &end_of_sweep](PointType& pt)
+                {   if (end_of_sweep) return sweep_ref_time - pt.timestamp * 1e-9f; 
+                    else return sweep_ref_time + pt.timestamp * 1e-9f; };
             } else {
                 std::cout << "-------------------------------------------------------------------\n";
                 std::cout << "FAST_LIMO::FATAL ERROR: LiDAR sensor type unknown or not specified!\n";
