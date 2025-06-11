@@ -183,8 +183,10 @@ namespace ros2wrap {
                 nav_msgs::msg::Odometry state_msg, body_msg;
                 this->fromLimoToROS(loc.getWorldState(), loc.getPoseCovariance(), loc.getTwistCovariance(), state_msg);
                 
-                this->state_pub->publish(state_msg);
-                
+                if (loc.is_calibrated()) {
+                    state_msg.child_frame_id = "base_link";
+                    this->state_pub->publish(state_msg);
+                }
                 // Publish body state only if debug is enabled
                 if (this->debug_enabled_) {
                     this->fromLimoToROS(loc.getBodyState(), loc.getPoseCovariance(), loc.getTwistCovariance(), body_msg);
@@ -192,7 +194,7 @@ namespace ros2wrap {
                 }
 
                 // TF broadcasting
-                if(this->publish_tf)
+                if(this->publish_tf && loc.is_calibrated())
                     this->broadcastTF(loc.getWorldState(), world_frame, body_frame, true);
             }
 
