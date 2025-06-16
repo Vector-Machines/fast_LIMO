@@ -184,6 +184,7 @@ namespace ros2wrap {
                 this->fromLimoToROS(loc.getWorldState(), loc.getPoseCovariance(), loc.getTwistCovariance(), state_msg);
                 
                 if (loc.is_calibrated()) {
+                    state_msg.header.frame_id = "map";
                     state_msg.child_frame_id = "base_link";
                     this->state_pub->publish(state_msg);
                 }
