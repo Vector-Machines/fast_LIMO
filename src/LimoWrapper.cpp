@@ -182,10 +182,8 @@ namespace ros2wrap {
                 // State publishing
                 nav_msgs::msg::Odometry state_msg, body_msg;
                 this->fromLimoToROS(loc.getWorldState(), loc.getPoseCovariance(), loc.getTwistCovariance(), state_msg);
-                
+
                 if (loc.is_calibrated()) {
-                    state_msg.header.frame_id = "map";
-                    state_msg.child_frame_id = "base_link";
                     this->state_pub->publish(state_msg);
                 }
                 // Publish body state only if debug is enabled
