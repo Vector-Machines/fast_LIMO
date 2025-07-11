@@ -789,12 +789,11 @@
                 { return pt.timestamp; };
 
             } else if (this->sensor == fast_limo::SensorType::LIVOX) {
-                
                 point_time_cmp = [](const PointType& p1, const PointType& p2)
                 { return p1.timestamp < p2.timestamp; };
-                // LIVOX timestamp is now in seconds (absolute time), use directly
-                extract_point_time = [](PointType& pt)
-                { return pt.timestamp; };
+                // LIVOX timestamp is a relative offset in seconds, add to sweep time
+                extract_point_time = [&sweep_ref_time](PointType& pt)
+                { return sweep_ref_time + pt.timestamp; };
             } else {
                 std::cout << "-------------------------------------------------------------------\n";
                 std::cout << "FAST_LIMO::FATAL ERROR: LiDAR sensor type unknown or not specified!\n";
