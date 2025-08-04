@@ -364,6 +364,7 @@ namespace ros2wrap {
             void fromLimoToROS(const fast_limo::State& in, nav_msgs::msg::Odometry& out){
                 out.header.stamp = this->get_clock()->now();
                 out.header.frame_id = this->world_frame;
+                out.child_frame_id = this->body_frame;
 
                 // Pose/Attitude
                 Eigen::Vector3d pos = in.p.cast<double>();
