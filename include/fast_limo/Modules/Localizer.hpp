@@ -20,6 +20,7 @@
 
 #include "fast_limo/Common.hpp"
 #include "fast_limo/Modules/Mapper.hpp"
+#include "fast_limo/Modules/iESEKF.hpp"
 #include "fast_limo/Objects/State.hpp"
 #include "fast_limo/Objects/Match.hpp"
 #include "fast_limo/Objects/Plane.hpp"
@@ -36,8 +37,8 @@ class fast_limo::Localizer {
         pcl::PointCloud<PointType>::Ptr pc2match; // pointcloud to match in Xt2 (last_state) frame
 
     private:
-        // Iterated Kalman Filter on Manifolds (FASTLIOv2)
-        esekfom::esekf<state_ikfom, 12, input_ikfom> _iKFoM;
+        // Iterated Error State Kalman Filter on Manifolds
+        std::unique_ptr<fast_limo::iESEKF::Filter> _iKFoM;
         std::mutex mtx_ikfom;
 
         State state, last_state;
@@ -173,7 +174,7 @@ class fast_limo::Localizer {
         fast_limo::SensorType get_sensor_type();
 
         // iKFoM measurement model
-        void calculate_H(const state_ikfom&, const Matches&, Eigen::MatrixXd& H, Eigen::VectorXd& h);
+        void calculate_H(const iESEKF::Group&, const Matches&, iESEKF::Measurement&, iESEKF::HMat&);
 
         // Backpropagation
         void propagateImu(const IMUmeas& imu);

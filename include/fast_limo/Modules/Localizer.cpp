@@ -160,7 +160,7 @@
             if(not this->is_calibrated())
                 return State();
 
-            State out = this->_iKFoM.get_x();
+            State out = fast_limo::State(this->_iKFoM->getState());
 
             out.w    = this->last_imu.ang_vel;                      // set last IMU meas
             out.a    = this->last_imu.lin_accel;                    // set last IMU meas
@@ -177,7 +177,7 @@
             if(not this->is_calibrated())
                 return State();
 
-            State out = this->_iKFoM.get_x();
+            State out = fast_limo::State(this->_iKFoM->getState());
 
             out.w    = this->last_imu.ang_vel;                      // set last IMU meas
             out.a    = this->last_imu.lin_accel;                    // set last IMU meas
@@ -210,12 +210,12 @@
             if(not this->is_calibrated())
                 return std::vector<double>(36, 0);
 
-            esekfom::esekf<state_ikfom, 12, input_ikfom>::cov P = this->_iKFoM.get_P();
+            auto P = this->_iKFoM->getCovariance();
             Eigen::Matrix<double, 6, 6> P_pose;
-            P_pose.block<3, 3>(0, 0) = P.block<3, 3>(3, 3);
-            P_pose.block<3, 3>(0, 3) = P.block<3, 3>(3, 0);
-            P_pose.block<3, 3>(3, 0) = P.block<3, 3>(0, 3);
-            P_pose.block<3, 3>(3, 3) = P.block<3, 3>(0, 0);
+            P_pose.block<3, 3>(0, 0) = P.block<3, 3>(3, 3).cast<double>();
+            P_pose.block<3, 3>(0, 3) = P.block<3, 3>(3, 0).cast<double>();
+            P_pose.block<3, 3>(3, 0) = P.block<3, 3>(0, 3).cast<double>();
+            P_pose.block<3, 3>(3, 3) = P.block<3, 3>(0, 0).cast<double>();
 
             std::vector<double> cov(P_pose.size());
             Eigen::Map<Eigen::MatrixXd>(cov.data(), P_pose.rows(), P_pose.cols()) = P_pose;
@@ -227,10 +227,10 @@
             if(not this->is_calibrated())
                 return std::vector<double>(36, 0);
 
-            esekfom::esekf<state_ikfom, 12, input_ikfom>::cov P = this->_iKFoM.get_P();
+            auto P = this->_iKFoM->getCovariance();
             Eigen::Matrix<double, 6, 6> P_odom = Eigen::Matrix<double, 6, 6>::Zero();
-            P_odom.block<3, 3>(0, 0) = (config.ikfom.cov_acc * Eigen::Matrix<double, 3, 3>::Identity());
-            P_odom.block<3, 3>(3, 3) = (config.ikfom.cov_gyro * Eigen::Matrix<double, 3, 3>::Identity());
+            P_odom.block<3, 3>(0, 0) = P.block<3, 3>(6, 6).cast<double>();
+            P_odom.block<3, 3>(3, 3) = config.ikfom.cov_gyro * Eigen::Matrix<double, 3, 3>::Identity();
 
             std::vector<double> cov(P_odom.size());
             Eigen::Map<Eigen::MatrixXd>(cov.data(), P_odom.rows(), P_odom.cols()) = P_odom;
@@ -328,17 +328,30 @@
                 // Call Mapper obj
                 fast_limo::Mapper& map = fast_limo::Mapper::getInstance();
 
-                    // Update iKFoM measurements (after prediction)
-                double solve_time = 0.0;
-                this->_iKFoM.update_iterated_dyn_share_modified(0.001 /*LiDAR noise*/, 5.0/*Degeneracy threshold*/, 
-                                                                solve_time/*solving time elapsed*/, false/*print degeneracy values flag*/);
-                    /*NOTE: update_iterated_dyn_share_modified() will trigger the matching procedure ( see "use-ikfom.cpp" )
-                    in order to update the measurement stage of the KF with the computed point-to-plane distances*/
-                
+                std::cout 
+                << "Position     {W}  [xyz] :: " + to_string_with_precision(this->state.p(0), 4) + " "
+                                            + to_string_with_precision(this->state.p(1), 4) + " "
+                                            + to_string_with_precision(this->state.p(2), 4)
+                << "|" << std::endl;
+
+                // Update iKFoM measurements 
+                this->_iKFoM->update
+                        <iESEKF::Measurement, 
+                        iESEKF::HMat> (0.001 /*LiDAR noise*/,
+                                        iESEKF::H_fun /*Measurement function*/);
+                /*NOTE: update() will trigger the matching procedure ( see "iESEKF.cpp" )
+                in order to update the measurement stage of the KF with the computed point-to-plane distances*/
+
                 map.matches.clear(); // clear matches vector for next iteration
 
                     // Get output state from iKFoM
-                fast_limo::State corrected_state = fast_limo::State(this->_iKFoM.get_x());
+                fast_limo::State corrected_state = fast_limo::State(this->_iKFoM->getState());
+
+                std::cout 
+                << "Position     {W}  [xyz] :: " + to_string_with_precision(corrected_state.p(0), 4) + " "
+                                            + to_string_with_precision(corrected_state.p(1), 4) + " "
+                                            + to_string_with_precision(corrected_state.p(2), 4)
+                << "|" << std::endl;
 
                 // Set estimated biases & gravity to constant
                 if(this->config.calibrate_gyro)  corrected_state.b.gyro  = this->state.b.gyro;
@@ -462,6 +475,7 @@
                     Eigen::Vector3f grav_vec (0., 0., this->gravity_);
 
                     this->state.q = imu.q;
+                    this->state.g = -grav_vec;
 
                     if (this->config.gravity_align) {
 
@@ -477,7 +491,7 @@
                         this->state.q = grav_q;
 
                         // set estimated gravity vector
-                        this->state.g = grav_vec;
+                        this->state.g = -grav_vec;
 
                     }
 
@@ -502,11 +516,11 @@
 
                     this->state.q.normalize();
 
-                    // Set initial KF state
-                    this->init_iKFoM_state();
-
                     // Set calib flag
                     this->imu_calibrated_ = true;
+
+                    // Set initial KF state
+                    this->init_iKFoM_state();
 
                     // Initial attitude
                     auto euler = this->state.q.toRotationMatrix().eulerAngles(2, 1, 0);
@@ -553,42 +567,54 @@
         /////////////////////////////////          KF measurement model        /////////////////////////////////////////////////////////
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        void Localizer::calculate_H(const state_ikfom& s, const Matches& matches, Eigen::MatrixXd& H, Eigen::VectorXd& h){
+        void Localizer::calculate_H(const iESEKF::Group& group, const Matches& matches, iESEKF::Measurement& z, iESEKF::HMat& H){
             
             int N = (matches.size() > config.ikfom.mapping.MAX_NUM_MATCHES) ? config.ikfom.mapping.MAX_NUM_MATCHES : matches.size();
 
-            H = Eigen::MatrixXd::Zero(N, 12);
-            h.resize(N);
-            State S(s);
+            H = iESEKF::HMat::Zero(N, iESEKF::Bundle::DoF);
+            z.resize(N);
+
+            iESEKF::Bundle s = group.impl(); // ManifBundle object
+            State S(group);
+
+            using Scalar = iESEKF::Scalar;
 
             // For each match, calculate its derivative and distance
             #pragma omp parallel for num_threads(this->num_threads_)
             for (int i = 0; i < N; ++i) {
                 Match match = matches[i];
-                Eigen::Vector4f p4_imu   = S.get_RT_inv() /*world2baselink*/ * match.get_4Dglobal();
-                Eigen::Vector4f p4_lidar = S.get_extr_RT_inv() /* baselink2lidar */ * p4_imu;
+                Eigen::Vector4f p4_lidar = S.get_extr_RT_inv() /* baselink2lidar */ *  match.get_4Dlocal();
                 Eigen::Vector4f normal   = match.plane.get_normal();
 
-                // Rotation matrices
-                Eigen::Matrix3f R_inv = s.rot.conjugate().toRotationMatrix().cast<float>();
-                Eigen::Matrix3f I_R_L_inv = s.offset_R_L_I.conjugate().toRotationMatrix().cast<float>();
-
                 // Set correct dimensions
-                Eigen::Vector3f p_lidar, p_imu, n;
+                Eigen::Vector3f p_lidar, n;
                 p_lidar = p4_lidar.head(3);
-                p_imu   = p4_imu.head(3);
                 n       = normal.head(3);
 
-                // Calculate measurement Jacobian H (:= dh/dx)
-                Eigen::Vector3f C = R_inv * n;
-                Eigen::Vector3f B = p_lidar.cross(I_R_L_inv * C);
-                Eigen::Vector3f A = p_imu.cross(C);
+                // 1. Compute jacobian w.r.t. extrinsic
+                Eigen::Matrix<Scalar, 3, manif::SE3<Scalar>::DoF> J_dE; // jacobian SE3 action := J_dE ​= d(E * p_lidar)/dE (where E:=extrinsic SE3 group)
+                manif::SE3<Scalar> SE3_s = s.subgroup<1>();
+                Eigen::Vector3f p_imu = SE3_s.act(p_lidar, J_dE);
+
+                // 2. Compute jacobian w.r.t. state
+                Eigen::Matrix<Scalar, 3, manif::SGal3<Scalar>::DoF> J_dX; // jacobian SGal3 action := J_dX ​= d(G * p_imu)/dX​
+                manif::SGal3<Scalar> SGal3_s = s.subgroup<0>();
+                SGal3_s.act(p_imu, J_dX);
+
+                // 3. Propagate through state (chain rule)
+                // Chain SE3->SGal3 manually (only translation + rotation affect position)
+                Eigen::Matrix<Scalar, 3, manif::SE3<Scalar>::DoF> J_extr;
+                J_extr.block<3,3>(0,0) = J_dX.block<3,3>(0,0) * J_dE.block<3,3>(0,0);   // translation
+                J_extr.block<3,3>(0,3) = J_dX.block<3,3>(0,3) * J_dE.block<3,3>(0,3);   // rotation
                 
-                H.block<1, 6>(i,0) << n(0), n(1), n(2), A(0), A(1), A(2);
-                if (config.ikfom.estimate_extrinsics) H.block<1, 6>(i,6) << B(0), B(1), B(2), C(0), C(1), C(2);
+                // 4. Fill H with extrinsic part
+                if (config.ikfom.estimate_extrinsics) H.block<1, manif::SE3<Scalar>::DoF>(i, manif::SGal3<Scalar>::DoF) << n.transpose() * J_extr;
+
+                // 5. Fill H with state part
+                H.block<1, manif::SGal3<Scalar>::DoF>(i, 0) = n.transpose() * J_dX;
 
                 // Measurement: distance to the closest plane
-                h(i) = -match.dist;
+                z(i) = -match.dist;
             }
 
             if(this->config.debug) 
@@ -600,25 +626,19 @@
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         void Localizer::propagateImu(const IMUmeas& imu){
-            input_ikfom in;
-            in.acc = imu.lin_accel.cast<double>();
-            in.gyro = imu.ang_vel.cast<double>();
-
-            Eigen::Matrix<double, 12, 12> Q = Eigen::Matrix<double, 12, 12>::Identity();
-            Q.block<3, 3>(0, 0) = config.ikfom.cov_gyro * Eigen::Matrix<double, 3, 3>::Identity();
-            Q.block<3, 3>(3, 3) = config.ikfom.cov_acc * Eigen::Matrix<double, 3, 3>::Identity();
-            Q.block<3, 3>(6, 6) = config.ikfom.cov_bias_gyro * Eigen::Matrix<double, 3, 3>::Identity();
-            Q.block<3, 3>(9, 9) = config.ikfom.cov_bias_acc * Eigen::Matrix<double, 3, 3>::Identity();
+            lie_odyssey::IMUmeas input;
+            input.accel = imu.lin_accel.cast<double>();
+            input.gyro = imu.ang_vel.cast<double>();
+            input.dt = imu.dt;
 
             // Propagate IMU measurement
-            double dt = imu.dt;
             this->mtx_ikfom.lock();
-            this->_iKFoM.predict(dt, Q, in);
+            this->_iKFoM->predict(input);
             this->mtx_ikfom.unlock();
 
             // Save propagated state for motion compensation
             this->mtx_prop.lock();
-            this->propagated_buffer.push_front( fast_limo::State(this->_iKFoM.get_x(), 
+            this->propagated_buffer.push_front( fast_limo::State(this->_iKFoM->getState(), 
                                                                 imu.stamp, imu.lin_accel, imu.ang_vel)
                                                 );
             this->mtx_prop.unlock();
@@ -627,12 +647,6 @@
         }
 
         void Localizer::propagateImu(double t1, double t2){
-
-            Eigen::Matrix<double, 12, 12> Q = Eigen::Matrix<double, 12, 12>::Identity();
-            Q.block<3, 3>(0, 0) = config.ikfom.cov_gyro * Eigen::Matrix<double, 3, 3>::Identity();
-            Q.block<3, 3>(3, 3) = config.ikfom.cov_acc * Eigen::Matrix<double, 3, 3>::Identity();
-            Q.block<3, 3>(6, 6) = config.ikfom.cov_bias_gyro * Eigen::Matrix<double, 3, 3>::Identity();
-            Q.block<3, 3>(9, 9) = config.ikfom.cov_bias_acc * Eigen::Matrix<double, 3, 3>::Identity();
 
             boost::circular_buffer<IMUmeas>::reverse_iterator begin_imu_it;
             boost::circular_buffer<IMUmeas>::reverse_iterator end_imu_it;
@@ -649,17 +663,16 @@
             this->mtx_ikfom.lock();
             this->mtx_prop.lock();
 
-            input_ikfom input;
-            double dt;
+            lie_odyssey::IMUmeas input;
             for (; imu_it != end_imu_it; imu_it++) {
                 const IMUmeas& imu = *imu_it;
 
-                input.acc  = imu.lin_accel.cast<double>();
+                input.accel = imu.lin_accel.cast<double>();
                 input.gyro = imu.ang_vel.cast<double>();
-                dt = imu.dt;
+                input.dt = imu.dt;
 
-                this->_iKFoM.predict(dt, Q, input);
-                this->propagated_buffer.push_front( fast_limo::State(this->_iKFoM.get_x(), 
+                this->_iKFoM->predict(input);
+                this->propagated_buffer.push_front( fast_limo::State(this->_iKFoM->getState(), 
                                                                 imu.stamp, imu.lin_accel, imu.ang_vel)
                                                     );
             }
@@ -677,39 +690,74 @@
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         void Localizer::init_iKFoM() {
+
+            iESEKF::Filter::NoiseMatrix Q = iESEKF::Filter::NoiseMatrix::Identity();
+            Q.block<3, 3>(0, 0) = static_cast<iESEKF::Scalar>(config.ikfom.cov_gyro) * Eigen::Matrix<iESEKF::Scalar, 3, 3>::Identity();
+            Q.block<3, 3>(3, 3) = static_cast<iESEKF::Scalar>(config.ikfom.cov_acc) * Eigen::Matrix<iESEKF::Scalar, 3, 3>::Identity();
+            Q.block<3, 3>(6, 6) = static_cast<iESEKF::Scalar>(config.ikfom.cov_bias_gyro) * Eigen::Matrix<iESEKF::Scalar, 3, 3>::Identity();
+            Q.block<3, 3>(9, 9) = static_cast<iESEKF::Scalar>(config.ikfom.cov_bias_acc) * Eigen::Matrix<iESEKF::Scalar, 3, 3>::Identity();
+
             // Initialize IKFoM
-            this->_iKFoM.init_dyn_share(
-                IKFoM::get_f,
-                IKFoM::df_dx,
-                IKFoM::df_dw,
-                IKFoM::h_share_model,
-                config.ikfom.MAX_NUM_ITERS,
-                config.ikfom.LIMITS
+            this->_iKFoM = std::make_unique<iESEKF::Filter>(
+                iESEKF::Filter::MatDoF::Identity()*1.0e-3f,
+                Q,
+                iESEKF::f,
+                iESEKF::df_dx,
+                iESEKF::df_dw
             );
+            this->_iKFoM->setMaxIters(config.ikfom.MAX_NUM_ITERS);
+
+            assert(config.ikfom.LIMITS.size() > 0);
+
+            this->_iKFoM->setTolerance(config.ikfom.LIMITS[0]);
         }
 
         void Localizer::init_iKFoM_state() {
-            state_ikfom init_state = this->_iKFoM.get_x();
-            init_state.rot = this->state.q.cast<double> ();
-            init_state.pos = this->state.p.cast<double> ();
-            init_state.grav = /*MTK::*/S2(Eigen::Vector3d(0., 0., -this->gravity_));
-            init_state.bg = this->state.b.gyro.cast<double>();
-            init_state.ba = this->state.b.accel.cast<double>();
 
-            // set up offsets (LiDAR -> BaseLink transform == LiDAR pose w.r.t. BaseLink)
-            init_state.offset_R_L_I = /*MTK::*/SO3(this->extr.lidar2baselink.R.cast<double>());
-            init_state.offset_T_L_I = this->extr.lidar2baselink.t.cast<double>();
-            this->_iKFoM.change_x(init_state); // set initial state
+            /*To-Do
+                - set initial covariance
+            */
 
-            esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = this->_iKFoM.get_P();
-            init_P.setIdentity();
-            init_P(6,6) = init_P(7,7) = init_P(8,8) = 0.000001;
-            init_P(9,9) = init_P(10,10) = init_P(11,11) = 0.000001;
-            init_P(15,15) = init_P(16,16) = init_P(17,17) = 0.00001;
-            init_P(18,18) = init_P(19,19) = init_P(20,20) = 0.0001;
-            init_P(21,21) = init_P(22,22) = 0.000001; 
-            
-            this->_iKFoM.change_P(init_P);
+            using NativeBundle = manif::Bundle<float, 
+                                            manif::SGal3,  // pose + velocity 
+                                            manif::SE3,    // LiDAR extrinsics
+                                            manif::R3,     // angular velocity bias
+                                            manif::R3,     // acceleration bias
+                                            manif::R3      // gravity 
+                                            >;
+
+            Eigen::Vector3f gravity = (this->imu_calibrated_) ? this->state.g : Eigen::Vector3f(0., 0., -this->gravity_);
+            Eigen::Vector3f lidar_p = this->extr.lidar2baselink.t;
+            Eigen::Quaternionf lidar_q(this->extr.lidar2baselink.R);
+
+            auto X0 = NativeBundle(manif::SGal3f(0., 0., 0.,                         // x y z                  0
+                                                0., 0., 0.,                          // roll pitch yaw         6
+                                                0., 0., 0.,                          // vx, vy, vz             3
+                                                0.),                                 // delta t                9
+                                    manif::SE3f(lidar_p, lidar_q),                    // LiDAR extrinsics      10       
+                                    manif::R3f(this->state.b.gyro),                  // b_w                   16
+                                    manif::R3f(this->state.b.accel),                 // b_a                   19
+                                    manif::R3f(gravity)                              // gravity               22
+                                );  
+            auto X0_group = iESEKF::Group(iESEKF::Bundle(X0)); // cast to lie_odyssey type  
+
+            this->_iKFoM->setState(X0_group); // set initial state
+
+            iESEKF::Group X = this->_iKFoM->getState(); 
+            auto g = X.impl().subgroup<4>().coeffs(); 			
+            auto p = X.impl().subgroup<0>().translation();	           
+
+            std::cout
+                << "Gravity INIT :: " << g(0) << " "
+                                << g(1) << " "
+                                << g(2)
+                << "|" << std::endl;
+
+            std::cout
+                << "Position INIT :: " << p(0) << " "
+                                << p(1) << " "
+                                << p(2)
+                << "|" << std::endl;
         }
 
         IMUmeas Localizer::imu2baselink(IMUmeas& imu){
@@ -836,7 +884,7 @@
             pcl::PointCloud<PointType>::Ptr deskewed_Xt2_scan_ (fast_limo::make_shared<pcl::PointCloud<PointType>>());
             deskewed_Xt2_scan_->points.resize(deskewed_scan_->points.size());
 
-            this->last_state = fast_limo::State(this->_iKFoM.get_x()); // baselink/body frame
+            this->last_state = fast_limo::State(this->_iKFoM->getState()); // baselink/body frame
 
             #pragma omp parallel for num_threads(this->num_threads_)
             for (int k = 0; k < deskewed_scan_->points.size(); k++) {
