@@ -1,0 +1,3 @@
+[submodule "submodules/LieOdyssey"]
+	path = submodules/LieOdyssey
+	url = https://github.com/fetty31/LieOdyssey.git
